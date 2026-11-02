@@ -1,0 +1,26 @@
+{
+  "dataset": "2 synthetic CSV invoice fixtures; NOT real-world benchmark",
+  "documents": 2,
+  "field_exact_match_accuracy": 1.0,
+  "document_success_rate": 1.0,
+  "document_failure_rate": 0.0,
+  "total_processing_ms": 47.25,
+  "details": [
+    {
+      "file": "invoice_001.csv",
+      "correct_fields": 7,
+      "fields": 7,
+      "issues": [],
+      "duration_ms": 16.93
+    },
+    {
+      "file": "invoice_bad_total.csv",
+      "correct_fields": 7,
+      "fields": 7,
+      "issues": [
+        "TOTAL_MISMATCH"
+      ],
+      "duration_ms": 30.28
+    }
+  ]
+}
