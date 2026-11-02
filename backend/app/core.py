@@ -224,6 +224,7 @@ def parse_document(path: Path, suffix: str):
 
             return "\n".join(texts)
 
+    
     # Excel processing
     if suffix in {".xlsx", ".xls"}:
         import pandas as pd
@@ -235,14 +236,25 @@ def parse_document(path: Path, suffix: str):
             dtype=str
         )
 
-        return "\n".join(
-            f"Sheet: {name}\n" +
-            df.fillna("").to_csv(
-                index=False,
-                header=False
-            )
-            for name, df in sheets.items()
-        )
+        texts = []
+
+        for name, df in sheets.items():
+            texts.append(f"Sheet: {name}")
+
+            for row in df.fillna("").values.tolist():
+                values = [
+                    str(value).strip()
+                    for value in row
+                ]
+
+                if len(values) >= 2:
+                    texts.append(
+                        f"{values[0]}: {values[1]}"
+                    )
+                else:
+                    texts.append(" | ".join(values))
+
+        return "\n".join(texts)
 
     # CSV processing
     if suffix == ".csv":
