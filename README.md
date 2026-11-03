@@ -15,7 +15,7 @@ A full-stack document intelligence prototype that extracts structured invoice in
 - Manual corrections and processing history
 - Retry failed processing jobs
 - REST API with FastAPI
-- React-based frontend dashboard
+- React-based frontend dashboard with invoice overview
 - Keyword search and optional semantic search
 - Automated backend tests
 
@@ -36,7 +36,7 @@ A full-stack document intelligence prototype that extracts structured invoice in
 ## Requirements
 
 - Python 3.10+
-- Node.js compatible with the installed Vite version
+- Node.js and npm compatible with the installed Vite version
 - Tesseract OCR installed and available in PATH
 - Git
 
@@ -53,7 +53,7 @@ cd careguide-document-intelligence
 
 ### Step 2 — Start Backend
 
-Open Terminal 1:
+Open Terminal 1 (Windows PowerShell):
 
 ```powershell
 cd backend
@@ -63,27 +63,17 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-For macOS/Linux, activate the virtual environment using:
+For macOS/Linux, activate the environment with `source .venv/bin/activate` and then run the corresponding installation and Uvicorn commands.
 
-```bash
-source .venv/bin/activate
-```
+Backend API: http://127.0.0.1:8001
 
-Backend API:
+Swagger API Documentation: http://127.0.0.1:8001/docs
 
-http://127.0.0.1:8001
-
-Swagger API Documentation:
-
-http://127.0.0.1:8001/docs
-
-Health Check:
-
-http://127.0.0.1:8001/health
+Health Check: http://127.0.0.1:8001/health
 
 ### Step 3 — Start Frontend
 
-Open Terminal 2:
+Open Terminal 2 from the repository root:
 
 ```powershell
 cd frontend
@@ -91,11 +81,11 @@ npm install
 npm run dev
 ```
 
-Frontend Dashboard:
+Open the frontend URL printed by Vite, normally http://localhost:5173. If port 5173 is busy, Vite may use http://localhost:5174 or another available port.
 
-http://localhost:5173
+**Local API connection:** The frontend uses relative API paths such as `/documents`. `frontend/vite.config.js` forwards those requests to `http://127.0.0.1:8001` during local development. No `VITE_API_URL` configuration is needed for this setup.
 
-The frontend's default API URL is configured for port 8001. If needed, configure `VITE_API_URL` to match the backend address.
+**Production-build note:** The Vite development proxy does not operate when the built static files are deployed. Production hosting requires a suitable reverse proxy or separate API configuration and security review. A successful `npm run build` does not establish deployment readiness.
 
 ## Supported Document Formats
 
@@ -116,12 +106,12 @@ From the backend directory:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Latest observed result:
+Latest observed local result:
 
 - 10 tests passed
 - 0 tests failed
 - 1 dependency deprecation warning
-- Execution time: 6.48 seconds
+- Execution time: 10.90 seconds
 
 ## Evaluation
 
@@ -211,6 +201,7 @@ This is an assessment prototype, not a production-ready financial document proce
 - Antivirus scanning, rate limiting, and production-grade access controls are not implemented.
 - Semantic search is optional and limited in scale.
 - The frontend currently focuses on keyword search.
+- The frontend's Vite proxy is for local development, not production hosting.
 - Evaluation results are based on a very small synthetic dataset.
 
 Production deployment would require stronger security, scalable background processing, additional evaluation data, and operational monitoring.
