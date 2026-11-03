@@ -1,12 +1,437 @@
-import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';import './style.css';
-const BASE=import.meta.env.VITE_API_URL||'http://localhost:8001';
-function App(){const[docs,setDocs]=useState([]),[selected,setSelected]=useState(null),[query,setQuery]=useState(''),[files,setFiles]=useState([]),[msg,setMsg]=useState(''),[edit,setEdit]=useState('{}'),[key,setKey]=useState(localStorage.getItem('api_key')||'');
-async function api(path,opts={}){const r=await fetch(BASE+path,{...opts,headers:{...(key?{'x-api-key':key}:{}),...(opts.headers||{})}});if(!r.ok)throw Error((await r.text()).slice(0,200));return r.json()}
-async function refresh(){try{setDocs(await api('/documents?q='+encodeURIComponent(query)));}catch(e){setMsg(e.message)}}
-useEffect(()=>{refresh();const id=setInterval(refresh,3500);return()=>clearInterval(id)},[query,key]);
-async function upload(){try{const form=new FormData();for(const f of files)form.append('files',f);await api('/documents',{method:'POST',body:form});setMsg('Upload queued');setFiles([]);refresh()}catch(e){setMsg(e.message)}}
-async function open(d){try{const x=await api('/documents/'+d.id);setSelected(x);setEdit(JSON.stringify(x.data,null,2))}catch(e){setMsg(e.message)}}
-async function save(){try{const d=await api('/documents/'+selected.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:JSON.parse(edit)})});setSelected(d);setMsg('Corrections saved');refresh()}catch(e){setMsg(e.message)}}
-async function retry(){try{await api('/documents/'+selected.id+'/retry',{method:'POST'});setMsg('Requeued');refresh()}catch(e){setMsg(e.message)}}
-return <main><header><div><small>CARE GUIDE • TECHNICAL ASSESSMENT DEMO</small><h1>Document Intelligence</h1><p>Process invoices, review validation issues, and search your documents.</p></div><div className="key">API key <input type="password" value={key} onChange={e=>{setKey(e.target.value);localStorage.setItem('api_key',e.target.value)}} placeholder="Optional local demo"/></div></header><section className="stats">{[['Documents',docs.length],['Completed',docs.filter(x=>x.status==='completed').length],['Needs review',docs.filter(x=>x.status==='review').length],['Failed',docs.filter(x=>x.status==='failed').length]].map(([a,b])=><article key={a}><span>{a}</span><strong>{b}</strong></article>)}</section><section className="panel"><h2>Upload documents</h2><p>PDF, PNG, JPG, TIFF, XLS, XLSX, CSV • max 25 MB each</p><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.xlsx,.xls,.csv" onChange={e=>setFiles([...e.target.files])}/><button disabled={!files.length} onClick={upload}>Upload {files.length||''} file(s)</button></section><section className="layout"><div className="panel"><div className="line"><h2>Documents</h2><input placeholder="Keyword search" value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="scroll"><table><thead><tr><th>Filename</th><th>Status</th><th>Actions</th></tr></thead><tbody>{docs.map(d=><tr key={d.id}><td>{d.filename}</td><td><span className={'pill '+d.status}>{d.status}</span></td><td><button className="secondary" onClick={()=>open(d)}>Inspect</button></td></tr>)}</tbody></table></div></div><div className="panel detail"><h2>Inspector</h2>{selected?<><p><b>{selected.filename}</b> · {selected.status}</p><h3>Validation issues</h3>{selected.issues?.length?<ul>{selected.issues.map((v,i)=><li key={i}>{v.code}: {v.message}</li>)}</ul>:<p>No validation issues.</p>}{selected.error&&<p className="error">{selected.error}</p>}<h3>Extracted JSON / manual correction</h3><textarea value={edit} onChange={e=>setEdit(e.target.value)} rows="15"/><div className="actions"><button onClick={save}>Save corrections</button>{selected.status==='failed'&&<button onClick={retry}>Retry failed job</button>}</div>{selected.text_preview&&<details><summary>Extracted text preview</summary><pre>{selected.text_preview}</pre></details>}</>:<p>Choose a document to inspect its extracted data.</p>}</div></section>{msg&&<aside role="status" onClick={()=>setMsg('')}>{msg} ×</aside>}<footer>Assessment prototype • No guarantee of financial correctness; manually verify flagged invoices.</footer></main>}
-createRoot(document.getElementById('root')).render(<App/>);
+
+import React, { useEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import './style.css';
+
+const BASE = '';
+
+const icons = {
+  dashboard: '▦',
+  documents: '▤',
+  upload: '↑',
+  history: '◷',
+  settings: '⚙',
+  search: '⌕',
+  refresh: '↻',
+  file: '▧',
+  check: '✓',
+  warning: '!',
+  error: '×',
+};
+
+function App() {
+  const [docs, setDocs] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [query, setQuery] = useState('');
+  const [files, setFiles] = useState([]);
+  const [msg, setMsg] = useState('');
+  const [edit, setEdit] = useState('{}');
+  const [key, setKey] = useState(localStorage.getItem('api_key') || '');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const fileInput = useRef(null);
+
+  async function api(path, opts = {}) {
+    const r = await fetch(BASE + path, {
+      ...opts,
+      headers: {
+        ...(key ? { 'x-api-key': key } : {}),
+        ...(opts.headers || {}),
+      },
+    });
+    if (!r.ok) throw Error((await r.text()).slice(0, 200));
+    return r.json();
+  }
+
+  async function refresh() {
+    try {
+      const data = await api('/documents?q=' + encodeURIComponent(query));
+      setDocs(data);
+    } catch (e) {
+      setMsg(e.message);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, 3500);
+    return () => clearInterval(id);
+  }, [query, key]);
+
+  async function upload() {
+    if (!files.length || uploading) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      for (const f of files) form.append('files', f);
+      await api('/documents', { method: 'POST', body: form });
+      setMsg('Documents uploaded successfully. Processing started.');
+      setFiles([]);
+      if (fileInput.current) fileInput.current.value = '';
+      await refresh();
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function open(d) {
+    setLoading(true);
+    try {
+      const x = await api('/documents/' + d.id);
+      setSelected(x);
+      setEdit(JSON.stringify(x.data ?? {}, null, 2));
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function save() {
+    if (!selected) return;
+    try {
+      const d = await api('/documents/' + selected.id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: JSON.parse(edit) }),
+      });
+      setSelected(d);
+      setEdit(JSON.stringify(d.data ?? {}, null, 2));
+      setMsg('Corrections saved successfully.');
+      refresh();
+    } catch (e) {
+      setMsg(e.message);
+    }
+  }
+
+  async function retry() {
+    if (!selected) return;
+    try {
+      await api('/documents/' + selected.id + '/retry', { method: 'POST' });
+      setMsg('Document requeued for processing.');
+      refresh();
+    } catch (e) {
+      setMsg(e.message);
+    }
+  }
+
+  function addFiles(newFiles) {
+    const incoming = Array.from(newFiles || []);
+    setFiles(previous => {
+      const merged = [...previous, ...incoming];
+      return merged.slice(0, 20);
+    });
+  }
+
+  const stats = [
+    { label: 'Total Documents', value: docs.length, icon: '▤', tone: 'blue' },
+    { label: 'Completed', value: docs.filter(d => d.status === 'completed').length, icon: '✓', tone: 'green' },
+    { label: 'Needs Review', value: docs.filter(d => d.status === 'review').length, icon: '!', tone: 'orange' },
+    { label: 'Failed', value: docs.filter(d => d.status === 'failed').length, icon: '×', tone: 'red' },
+  ];
+
+  const navigation = [
+    { id: 'dashboard', label: 'Dashboard', icon: icons.dashboard },
+    { id: 'documents', label: 'Documents', icon: icons.documents },
+    { id: 'upload', label: 'Upload Files', icon: icons.upload },
+    { id: 'settings', label: 'Settings', icon: icons.settings },
+  ];
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">C</div>
+          <div>
+            <strong>Care Guide</strong>
+            <span>Document Intelligence</span>
+          </div>
+        </div>
+
+        <div className="nav-caption">WORKSPACE</div>
+        <nav className="nav-menu">
+          {navigation.map(item => (
+            <button
+              key={item.id}
+              className={'nav-item ' + (activeTab === item.id ? 'active' : '')}
+              onClick={() => setActiveTab(item.id)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="sidebar-help">
+            <span>✦</span>
+            <strong>AI-Powered Workflow</strong>
+            <p>Extract, validate and review your documents in one place.</p>
+          </div>
+          <div className="sidebar-footer">Assessment Demo · v1.0</div>
+        </div>
+      </aside>
+
+      <div className="workspace">
+        <header className="topbar">
+          <div className="breadcrumb">Workspace <span>/</span> {navigation.find(n => n.id === activeTab)?.label}</div>
+          <div className="topbar-right">
+            <span className="live-indicator"><i /> Local Demo</span>
+            <div className="avatar">CG</div>
+          </div>
+        </header>
+
+        <main className="main-content">
+          <div className="page-heading">
+            <div>
+              <span className="eyebrow">DOCUMENT PROCESSING PLATFORM</span>
+              <h1>{activeTab === 'settings' ? 'Settings' : activeTab === 'upload' ? 'Upload Documents' : activeTab === 'documents' ? 'Document Library' : 'Dashboard Overview'}</h1>
+              <p>Manage document extraction, validation and review with confidence.</p>
+            </div>
+            <button className="outline-btn" onClick={refresh}>
+              <span>{icons.refresh}</span> Refresh Data
+            </button>
+          </div>
+
+          {activeTab === 'settings' ? (
+            <section className="panel settings-panel">
+              <div className="section-heading">
+                <div>
+                  <h2>API Configuration</h2>
+                  <p>Configure an optional API key for your local environment.</p>
+                </div>
+              </div>
+              <label htmlFor="api-key">API Key</label>
+              <input
+                id="api-key"
+                type="password"
+                value={key}
+                onChange={e => {
+                  setKey(e.target.value);
+                  localStorage.setItem('api_key', e.target.value);
+                }}
+                placeholder="Optional local demo"
+              />
+              <p className="hint">This setting is saved in this browser for the local demo.</p>
+            </section>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <section className="stats">
+                  {stats.map(stat => (
+                    <article className="stat-card" key={stat.label}>
+                      <div className="stat-top">
+                        <span>{stat.label}</span>
+                        <span className={'stat-icon ' + stat.tone}>{stat.icon}</span>
+                      </div>
+                      <strong>{stat.value}</strong>
+                      <div className="stat-bottom">Document processing overview</div>
+                    </article>
+                  ))}
+                </section>
+              )}
+
+              {(activeTab === 'dashboard' || activeTab === 'upload') && (
+                <section className="panel upload-panel">
+                  <div className="section-heading">
+                    <div>
+                      <h2>Upload Documents</h2>
+                      <p>Add your invoices and let the system extract important information.</p>
+                    </div>
+                    <span className="section-tag">MULTI-FORMAT</span>
+                  </div>
+
+                  <div
+                    className={'dropzone ' + (dragging ? 'dragging' : '')}
+                    onDragOver={e => { e.preventDefault(); setDragging(true); }}
+                    onDragLeave={e => { e.preventDefault(); setDragging(false); }}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragging(false);
+                      addFiles(e.dataTransfer.files);
+                    }}
+                  >
+                    <div className="upload-symbol">↑</div>
+                    <h3>Drag and drop your files here</h3>
+                    <p>or browse from your computer to get started</p>
+                    <input
+                      ref={fileInput}
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.xlsx,.xls,.csv"
+                      onChange={e => addFiles(e.target.files)}
+                      hidden
+                    />
+                    <button className="outline-btn" onClick={() => fileInput.current?.click()}>
+                      Browse Files
+                    </button>
+                    <div className="upload-hint">PDF, PNG, JPG, TIFF, XLS, XLSX, CSV · Max 25 MB per file</div>
+                  </div>
+
+                  {files.length > 0 && (
+                    <div className="selected-files">
+                      <div className="selected-heading">
+                        <strong>Selected Files ({files.length})</strong>
+                        <button className="text-btn" onClick={() => {
+                          setFiles([]);
+                          if (fileInput.current) fileInput.current.value = '';
+                        }}>Clear all</button>
+                      </div>
+                      <div className="file-chips">
+                        {files.map((f, i) => (
+                          <span className="file-chip" key={i}>
+                            ▧ {f.name}
+                            <button aria-label={'Remove ' + f.name} onClick={() => setFiles(files.filter((_, j) => i !== j))}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                      <button className="primary-btn" disabled={uploading} onClick={upload}>
+                        {uploading ? 'Uploading...' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <section className="content-grid">
+                <div className="panel documents-panel">
+                  <div className="section-heading documents-heading">
+                    <div>
+                      <h2>Recent Documents</h2>
+                      <p>View and manage your processed files.</p>
+                    </div>
+                    <span className="count-label">{docs.length} files</span>
+                  </div>
+
+                  <div className="search-box">
+                    <span>⌕</span>
+                    <input
+                      placeholder="Search documents by keyword..."
+                      value={query}
+                      onChange={e => setQuery(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>DOCUMENT</th>
+                          <th>STATUS</th>
+                          <th>ACTION</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.map(d => (
+                          <tr key={d.id} className={selected?.id === d.id ? 'selected-row' : ''}>
+                            <td>
+                              <div className="file-cell">
+                                <span className="file-icon">▧</span>
+                                <span className="filename">{d.filename}</span>
+                              </div>
+                            </td>
+                            <td><span className={'pill ' + d.status}>{d.status}</span></td>
+                            <td><button className="inspect-btn" onClick={() => open(d)}>Inspect →</button></td>
+                          </tr>
+                        ))}
+                        {!docs.length && (
+                          <tr><td colSpan="3" className="empty-table">No documents found. Upload a file to get started.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="panel inspector-panel">
+                  <div className="section-heading">
+                    <div>
+                      <h2>Document Inspector</h2>
+                      <p>Review extraction results and make corrections.</p>
+                    </div>
+                  </div>
+
+                  {loading ? <p>Loading document...</p> : selected ? (
+                    <div className="inspector-body">
+                      <div className="inspected-file">
+                        <span className="file-icon">▧</span>
+                        <div>
+                          <strong>{selected.filename}</strong>
+                          <span className={'pill ' + selected.status}>{selected.status}</span>
+                        </div>
+                      </div>
+
+                      <div className="subheading">VALIDATION RESULTS</div>
+                      {selected.issues?.length ? (
+                        <div className="issues-list">
+                          {selected.issues.map((issue, i) => (
+                            <div className="issue-item" key={i}>
+                              <span className="issue-symbol">!</span>
+                              <div><strong>{issue.code}</strong><p>{issue.message}</p></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="success-message"><span>✓</span> No validation issues detected.</div>
+                      )}
+
+                      {selected.error && <div className="error-message">{selected.error}</div>}
+
+                      <div className="editor-heading">
+                        <div className="subheading">EXTRACTED DATA / MANUAL CORRECTION</div>
+                        <span className="json-tag">JSON</span>
+                      </div>
+                      <textarea
+                        className="json-editor"
+                        value={edit}
+                        onChange={e => setEdit(e.target.value)}
+                        rows="13"
+                        spellCheck={false}
+                      />
+
+                      <div className="inspector-actions">
+                        <button className="primary-btn" onClick={save}>Save Corrections</button>
+                        {selected.status === 'failed' && (
+                          <button className="outline-btn" onClick={retry}>Retry Processing</button>
+                        )}
+                      </div>
+
+                      {selected.text_preview && (
+                        <details className="preview-details">
+                          <summary>View Extracted Text</summary>
+                          <pre>{selected.text_preview}</pre>
+                        </details>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="empty-inspector">
+                      <div className="empty-icon">▤</div>
+                      <h3>No document selected</h3>
+                      <p>Choose a document from the list to inspect extracted data and validation results.</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+
+          <footer>
+            Care Guide Document Intelligence · Technical Assessment Demo
+            <span>Financial data should be manually verified before use.</span>
+          </footer>
+        </main>
+      </div>
+
+      {msg && (
+        <div className="toast" role="status" onClick={() => setMsg('')}>
+          {msg} <span>×</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
