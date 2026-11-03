@@ -19,6 +19,60 @@ const icons = {
   error: '×',
 };
 
+
+// Readable overview of extracted invoice fields. The JSON editor remains the source
+// of the draft values, so the overview updates as corrections are typed.
+function firstValue(data, keys) {
+  for (const key of keys) {
+    const value = data?.[key];
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return null;
+}
+
+function displayValue(value) {
+  if (value === null || value === undefined || value === '') return 'Not available';
+  if (typeof value === 'object') return 'Not available';
+  return String(value);
+}
+
+function InvoiceOverview({ data, status }) {
+  const invoice = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  const supplier = firstValue(invoice, ['supplier_name', 'supplier', 'vendor_name', 'vendor', 'seller_name']);
+  const fields = [
+    { label: 'Invoice Number', value: firstValue(invoice, ['invoice_number', 'invoice_no', 'invoice_id', 'number']) },
+    { label: 'Supplier', value: typeof supplier === 'object' ? firstValue(supplier, ['name', 'company']) : supplier },
+    { label: 'Subtotal', value: firstValue(invoice, ['subtotal', 'sub_total', 'subtotal_amount']) },
+    { label: 'Tax', value: firstValue(invoice, ['tax', 'tax_amount', 'total_tax', 'vat']) },
+    { label: 'Total', value: firstValue(invoice, ['total', 'total_amount', 'grand_total', 'invoice_total']) },
+    { label: 'Status', value: status },
+  ];
+  const hasInvoiceData = fields.slice(0, 5).some(field => field.value !== null);
+
+  return (
+    <section className="invoice-overview" aria-label="Invoice overview">
+      <div className="invoice-overview-header">
+        <div>
+          <h3>Invoice Overview</h3>
+          <p>Quick summary of extracted data</p>
+        </div>
+        <span className="invoice-overview-tag">LIVE PREVIEW</span>
+      </div>
+      {!hasInvoiceData && <p className="invoice-overview-note">No recognized invoice fields available in this document.</p>}
+      <div className="invoice-overview-grid">
+        {fields.map(field => (
+          <div className="invoice-overview-card" key={field.label}>
+            <span className="invoice-overview-label">{field.label}</span>
+            <strong className="invoice-overview-value" title={displayValue(field.value)}>
+              {displayValue(field.value)}
+            </strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const [docs, setDocs] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -379,6 +433,22 @@ function App() {
                       )}
 
                       {selected.error && <div className="error-message">{selected.error}</div>}
+
+                      {(() => {
+                        let draftData = selected.data ?? {};
+                        let invalidJson = false;
+                        try {
+                          draftData = JSON.parse(edit);
+                        } catch {
+                          invalidJson = true;
+                        }
+                        return (
+                          <>
+                            {invalidJson && <p className="invoice-overview-note">JSON is incomplete or invalid. Showing the last saved invoice overview.</p>}
+                            <InvoiceOverview data={draftData} status={selected.status} />
+                          </>
+                        );
+                      })()}
 
                       <div className="editor-heading">
                         <div className="subheading">EXTRACTED DATA / MANUAL CORRECTION</div>
