@@ -1,69 +1,241 @@
 # AI-Powered Document Intelligence System
 
-**Care Guide AI Engineer Assessment — runnable local prototype.**
+**Care Guide AI Engineer Assessment — Runnable Local Prototype**
+
+A full-stack document intelligence prototype that extracts structured invoice information from PDF, image, Excel, and CSV files, validates financial information, and provides a dashboard for reviewing and correcting results.
 
 ## Features
-- Multi-file upload; digital and scanned PDF, JPG/PNG/TIFF, XLS/XLSX, CSV ingestion
-- OCR via installed Tesseract, multi-page PDF and multi-sheet Excel
-- Rule-based extraction for predictable demo invoices, optional LLM-assisted JSON extraction
-- Financial validation, missing fields, duplicate invoice checks, manual corrections
-- REST API, processing history, retry failed jobs, keyword search
-- Optional semantic search (sentence-transformers), React dashboard, automated tests
+
+- Multi-file document upload
+- PDF, JPG, PNG, TIFF, XLS, XLSX, and CSV ingestion
+- OCR using Tesseract for scanned documents
+- Multi-page PDF and multi-sheet Excel processing
+- Rule-based invoice extraction with optional LLM assistance
+- Financial validation and duplicate invoice detection
+- Manual corrections and processing history
+- Retry failed processing jobs
+- REST API with FastAPI
+- React-based frontend dashboard
+- Keyword search and optional semantic search
+- Automated backend tests
+
+## Technology Stack
+
+| Component | Technology |
+|---|---|
+| Backend | Python, FastAPI |
+| Frontend | React, Vite |
+| Database | SQLite, SQLAlchemy |
+| OCR | Tesseract, pytesseract |
+| PDF Processing | PyMuPDF |
+| Excel Processing | pandas |
+| Testing | pytest |
+| Optional AI | OpenAI-compatible LLM |
+| Optional Semantic Search | sentence-transformers |
 
 ## Requirements
-Python 3.10+, Node.js 18+, Tesseract OCR installed and available on PATH (needed for scans). On Windows install Tesseract and add its installation directory to PATH. Optional LLM API key. No API key is required for the sample demo.
 
-## Quick start (two terminals)
-**Terminal 1 — backend**
+- Python 3.10+
+- Node.js compatible with the installed Vite version
+- Tesseract OCR installed and available in PATH
+- Git
+
+No LLM API key is required for the sample demonstration.
+
+## Installation and Setup
+
+### Step 1 — Clone the Repository
+
 ```bash
+git clone https://github.com/shafinSI/careguide-document-intelligence.git
+cd careguide-document-intelligence
+```
+
+### Step 2 — Start Backend
+
+Open Terminal 1:
+
+```powershell
 cd backend
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
-**Terminal 2 — frontend**
+
+For macOS/Linux, activate the virtual environment using:
+
 ```bash
+source .venv/bin/activate
+```
+
+Backend API:
+
+http://127.0.0.1:8001
+
+Swagger API Documentation:
+
+http://127.0.0.1:8001/docs
+
+Health Check:
+
+http://127.0.0.1:8001/health
+
+### Step 3 — Start Frontend
+
+Open Terminal 2:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
-Open http://localhost:5173 and API documentation at http://localhost:8000/docs. Upload `samples/invoice_001.csv` and inspect the result. Test cases:
-```bash
-cd backend
-pytest -q
-python evaluate.py  # small synthetic smoke metrics; see docs/SMOKE_EVALUATION.json
+
+Frontend Dashboard:
+
+http://localhost:5173
+
+The frontend's default API URL is configured for port 8001. If needed, configure `VITE_API_URL` to match the backend address.
+
+## Supported Document Formats
+
+| Format | Processing Method | Local Test |
+|---|---|---|
+| PDF | Text extraction / OCR fallback | Passed |
+| CSV | Structured text parsing | Passed |
+| Excel | Spreadsheet parsing | Passed |
+| PNG Image | Tesseract OCR | Passed |
+
+The reported tests use local sample invoices, not a representative production dataset.
+
+## Automated Testing
+
+From the backend directory:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-## Optional settings
-Set environment variables (see `.env.example`) before starting backend. `APP_API_KEY` enables simple shared-key auth (send `x-api-key`); do not use this mechanism for multi-tenant production auth. `LLM_API_KEY` enables an OpenAI-compatible chat-completions endpoint. **Sensitive financial data is sent to the configured provider when enabled.** Never put credentials in frontend code or Git. `DATABASE_URL` can point to PostgreSQL when psycopg is installed; SQLite is the default local prototype DB. For optional semantic search: `pip install sentence-transformers`; first request downloads model weights and may take time.
+Latest observed result:
 
-## API endpoints
-| Method | Path | Description |
+- 10 tests passed
+- 0 tests failed
+- 1 dependency deprecation warning
+- Execution time: 6.48 seconds
+
+## Evaluation
+
+Run the evaluation from the backend directory:
+
+```powershell
+.\.venv\Scripts\python.exe evaluate.py
+```
+
+### Observed Evaluation Results
+
+| Metric | Result |
+|---|---|
+| Dataset | 2 synthetic CSV invoices |
+| Field Exact-Match Accuracy | 100% |
+| Document Success Rate | 100% |
+| Document Failure Rate | 0% |
+| Total Processing Time | 11.22 ms |
+
+The incorrect-total invoice correctly generated a `TOTAL_MISMATCH` validation issue.
+
+**Important:** These metrics describe only two synthetic CSV fixtures. They are not a statistically valid estimate of real-world accuracy, performance, or reliability.
+
+## Image OCR Verification
+
+A local PNG invoice was successfully processed through the FastAPI backend.
+
+| Field | Extracted Value |
+|---|---|
+| Invoice Number | INV-2026-006 |
+| Supplier | Image Test Supplies |
+| Subtotal | 4000 |
+| Tax | 600 |
+| Total | 4600 |
+| Currency | BDT |
+| Status | completed |
+| Validation Issues | None |
+| Processing Time | 1391 ms |
+
+## API Endpoints
+
+| Method | Endpoint | Description |
 |---|---|---|
-| GET | /health | Liveness |
-| POST | /documents | Multi-file upload; returns IDs |
-| GET | /documents?q=&status= | Keyword search/list |
-| GET | /documents/{id} | Extracted fields, validation, preview |
-| GET | /documents/{id}/history | Processing audit trail |
-| PATCH | /documents/{id} | Manual correction JSON: `{"data":{"total":115}}` |
-| POST | /documents/{id}/retry | Retry failed processing |
-| GET | /search/semantic?q= | Optional embeddings search |
+| GET | `/health` | Health check |
+| POST | `/documents` | Upload documents |
+| GET | `/documents` | List and search documents |
+| GET | `/documents/{id}` | Document details |
+| GET | `/documents/{id}/history` | Processing history |
+| PATCH | `/documents/{id}` | Manual correction |
+| POST | `/documents/{id}/retry` | Retry processing |
+| GET | `/search/semantic` | Optional semantic search |
 
 ## Architecture
-See `docs/ARCHITECTURE.md`. Main pipeline: upload → persist file + DB row → background task → PDF/OCR/spreadsheet text → LLM or heuristic JSON → deterministic validation → store result → dashboard. File upload and OCR failures are captured as failed jobs.
 
-## Limitations / next production steps
-This is an **assessment prototype, not production-ready**. FastAPI BackgroundTasks is process-local and is not a durable queue: server restarts can lose queued work; replace with Redis + Celery/RQ for long-running 1000-page PDF jobs. LLM currently truncates text to 60k characters; large PDFs require page-wise extraction, batching, chunk reconciliation, and pagination. No document-to-document reconciliation, robust table extraction, antivirus scanning, full RBAC, cloud object storage, rate limits, migration system, tenant isolation, or vector index are implemented. OCR quality varies with scans; review uncertain fields. Semantic search uses in-memory embeddings over at most 500 documents; add pgvector for scale. The frontend provides keyword search, not semantic-search controls. The sample is synthetic and not a statistically valid accuracy benchmark. Restrict uploads and secure access before any real customer data is used.
+See `docs/ARCHITECTURE.md` for the architecture diagram and database schema.
 
-## Submission checklist
-- [x] Source, README, architecture + schema, backend, frontend, PDF/image/Excel/CSV parsing code, tests
-- [ ] Run integration tests and collect real measurements in your own environment
-- [ ] Record screen walkthrough showing successful processing and corrections
-- [ ] Publish to your own GitHub repository and add its URL
-- [ ] Obtain permission to share any real invoice data
-- [ ] Include AI assistance disclosure in submission
+Processing pipeline:
 
-## AI assistance disclosure
-Initial prototype architecture, code, tests, and documentation were generated with assistance from ChatGPT (OpenAI). The candidate must personally review, run, debug, test, and be able to explain the work. Do not claim independently authored code or verified metrics unless substantiated.
+1. Upload document
+2. Store file and database record
+3. Start background processing
+4. Extract document text
+5. Generate structured invoice fields
+6. Validate extracted information
+7. Save results and processing history
+8. Display results in the dashboard
+
+## Optional Configuration
+
+Refer to `.env.example` for backend configuration.
+
+- `APP_API_KEY` — optional shared-key authentication
+- `LLM_API_KEY` — optional LLM integration
+- `DATABASE_URL` — database connection configuration
+
+When LLM integration is enabled, sensitive document content may be transmitted to the configured provider. Never commit credentials to GitHub.
+
+## Limitations
+
+This is an assessment prototype, not a production-ready financial document processing platform.
+
+- BackgroundTasks is not a durable job queue.
+- Large PDFs require more robust batching and chunking.
+- OCR accuracy depends on document quality.
+- Complex invoice tables may require additional extraction logic.
+- Production authentication and tenant isolation are not implemented.
+- Antivirus scanning, rate limiting, and production-grade access controls are not implemented.
+- Semantic search is optional and limited in scale.
+- The frontend currently focuses on keyword search.
+- Evaluation results are based on a very small synthetic dataset.
+
+Production deployment would require stronger security, scalable background processing, additional evaluation data, and operational monitoring.
+
+## Submission Checklist
+
+- [x] Backend and frontend implementation
+- [x] PDF, CSV, Excel, and image OCR processing
+- [x] Automated backend tests
+- [x] Local processing verification
+- [x] Synthetic evaluation results
+- [x] Architecture and database schema documentation
+- [x] GitHub repository published
+- [x] AI assistance disclosure documented
+- [ ] Record screen walkthrough
+- [ ] Complete final submission review
+
+Only synthetic sample invoices are included in the demonstrated evaluation. Permission must be obtained before sharing any real customer invoices.
+
+## GitHub Repository
+
+https://github.com/shafinSI/careguide-document-intelligence
+
+## AI Assistance Disclosure
+
+ChatGPT (OpenAI) assisted with the initial architecture, code generation, tests, documentation, and debugging guidance.
+
+The candidate subsequently ran, reviewed, debugged, and tested the application locally. AI assistance is disclosed transparently, and the reported measurements are limited to the tests actually performed.
