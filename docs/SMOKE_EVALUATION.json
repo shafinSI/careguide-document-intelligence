@@ -4,14 +4,14 @@
   "field_exact_match_accuracy": 1.0,
   "document_success_rate": 1.0,
   "document_failure_rate": 0.0,
-  "total_processing_ms": 47.25,
+  "total_processing_ms": 11.22,
   "details": [
     {
       "file": "invoice_001.csv",
       "correct_fields": 7,
       "fields": 7,
       "issues": [],
-      "duration_ms": 16.93
+      "duration_ms": 10.16
     },
     {
       "file": "invoice_bad_total.csv",
@@ -20,7 +20,7 @@
       "issues": [
         "TOTAL_MISMATCH"
       ],
-      "duration_ms": 30.28
+      "duration_ms": 1.01
     }
   ]
 }

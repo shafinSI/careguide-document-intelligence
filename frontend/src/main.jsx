@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';import './style.css';
-const BASE=import.meta.env.VITE_API_URL||'http://localhost:8000';
+const BASE=import.meta.env.VITE_API_URL||'http://localhost:8001';
 function App(){const[docs,setDocs]=useState([]),[selected,setSelected]=useState(null),[query,setQuery]=useState(''),[files,setFiles]=useState([]),[msg,setMsg]=useState(''),[edit,setEdit]=useState('{}'),[key,setKey]=useState(localStorage.getItem('api_key')||'');
 async function api(path,opts={}){const r=await fetch(BASE+path,{...opts,headers:{...(key?{'x-api-key':key}:{}),...(opts.headers||{})}});if(!r.ok)throw Error((await r.text()).slice(0,200));return r.json()}
 async function refresh(){try{setDocs(await api('/documents?q='+encodeURIComponent(query)));}catch(e){setMsg(e.message)}}
